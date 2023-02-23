@@ -60,7 +60,7 @@ class Sudoku {
         std::array<int, N*N> posibilities;
 
         bool inner_solve(
-            const Hints<N>&,
+            Hints<N>&,
             std::vector<Sudoku<N>>&,
             SolveMode,
             std::default_random_engine&
@@ -131,7 +131,10 @@ std::vector<Sudoku<N>> Sudoku<N>::solve(
     std::vector<Sudoku> solutions;
     // reset in case of previous random search
     std::iota(std::begin(posibilities), std::end(posibilities), 1);
-    this->inner_solve(this->gen_hints(), solutions, mode, rng);
+    Hints<N> hints = this->gen_hints();
+    // do not change this sudoku itself:
+    Sudoku<N> cp(*this);
+    cp.inner_solve(hints, solutions, mode, rng);
     return solutions;
 }
 
@@ -143,8 +146,17 @@ bool Sudoku<N>::is_unique() {
 
 
 template <int N>
+void remove_hint(Hints<N>& hints, int i, int j, int k) {
+    for (int x=0; x < N*N; ++x) {
+        hints[i][x][k] = false;
+        hints[x][j][k] = false;
+        hints[N*(i/N) + x/N][N*(j/N) + x%N][k] = false;
+    }
+}
+
+template <int N>
 bool Sudoku<N>::inner_solve(
-        const Hints<N>& hints,
+        Hints<N>& hints,
         std::vector<Sudoku<N>>& solutions,
         SolveMode mode,
         std::default_random_engine& rng
@@ -154,17 +166,29 @@ bool Sudoku<N>::inner_solve(
     int best_j = 0;
     int clues = N*N+1;
     bool solved = true;
+    // TODO: this may be further improved by first looping the trivial
+    // fill and only afterwards looking for the branching point
     for (int i=0; i < N*N; ++i) {
         for (int j=0; j < N*N; ++j) {
             if (this->field[i][j] != 0) {
                 continue;
             }
-            solved = false;
+            int last_k = 0;
             int current_clues = 0;
             for (int k=1; k <= N*N; ++k) {
-                current_clues += hints[i][j][k];
+                if (hints[i][j][k]) {
+                    current_clues++;
+                    last_k = k;
+                }
             }
-            if (current_clues < clues) {
+            if (current_clues == 1) {
+                // trivial fill
+                this->field[i][j] = last_k;
+                remove_hint<N>(hints, i, j, last_k);
+            } else if (current_clues == 0) {
+                return false;
+            } else if (current_clues < clues) {
+                solved = false;
                 best_i = i;
                 best_j = j;
                 clues = current_clues;
@@ -198,11 +222,7 @@ bool Sudoku<N>::inner_solve(
 
         // insert k into copies
         current.field[best_i][best_j] = k;
-        for (int x=0; x < N*N; ++x) {
-            hints_cp[best_i][x][k] = false;
-            hints_cp[x][best_j][k] = false;
-            hints_cp[N*(best_i/N) + x/N][N*(best_j/N) + x%N][k] = false;
-        }
+        remove_hint<N>(hints_cp, best_i, best_j, k);
 
         if (current.inner_solve(hints_cp, solutions, mode, rng)) {
             return true;
