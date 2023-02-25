@@ -18,8 +18,15 @@ Field<int, N> random_partial_field(std::mt19937& rng) {
         std::end(row),
         rng
     );
+    std::array<int, N*N> col;
+    std::iota(std::begin(col), std::end(col), 1);
+    std::shuffle(
+        std::begin(col),
+        std::end(col),
+        rng
+    );
     for (int k=0; k < N*N; ++k) {
-        field[k][0] = row[k];
+        field[row[k]][col[k]] = k;
     }
     // all further construction seems too slow to justify the further speed up
 
