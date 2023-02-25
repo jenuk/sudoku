@@ -42,7 +42,7 @@ Sudoku<N> make_minimal(
         ) {
     Sudoku<N> minimal;
     std::array<int, N*N*N*N> clue_order;
-    std::iota(std::begin(clue_order), std::end(clue_order), 1);
+    std::iota(std::begin(clue_order), std::end(clue_order), 0);
     std::shuffle(
         std::begin(clue_order),
         std::end(clue_order),
