@@ -14,10 +14,10 @@ constexpr int N = 3;
 
 int main(int argc, char** argv){
     std::random_device rd;
-    std::default_random_engine rng(rd());
+    std::mt19937 rng(rd());
 
     std::string filename = "generated.txt";
-    int n = 100;
+    int n = 1000;
     // very basic argument parsing
     if (argc > 1) {
         filename = argv[1];

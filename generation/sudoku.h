@@ -40,7 +40,7 @@ class Sudoku {
         Hints<N> gen_hints();
         std::vector<Sudoku> solve();
         std::vector<Sudoku> solve(SolveMode);
-        std::vector<Sudoku> solve(SolveMode, std::default_random_engine&);
+        std::vector<Sudoku> solve(SolveMode, std::mt19937&);
         bool is_unique();
 
         template <int M>
@@ -51,10 +51,11 @@ class Sudoku {
         template <int M>
         friend Sudoku<M> make_minimal(
             const Sudoku<M>&,
-            std::default_random_engine&
+            std::mt19937&
             );
 
         static bool pprint; // pretty print vs comptact print
+
     private:
         Field<int, N> field;
         std::array<int, N*N> posibilities;
@@ -63,7 +64,7 @@ class Sudoku {
             Hints<N>&,
             std::vector<Sudoku<N>>&,
             SolveMode,
-            std::default_random_engine&
+            std::mt19937&
             );
 };
 
@@ -118,7 +119,7 @@ std::vector<Sudoku<N>> Sudoku<N>::solve(SolveMode mode) {
     std::vector<Sudoku> solutions;
     // reset in case of previous random search
     std::random_device rd;
-    std::default_random_engine rng(rd());
+    std::mt19937 rng(rd());
     return this->solve(mode, rng);
 }
 
@@ -126,7 +127,7 @@ std::vector<Sudoku<N>> Sudoku<N>::solve(SolveMode mode) {
 template <int N>
 std::vector<Sudoku<N>> Sudoku<N>::solve(
         SolveMode mode,
-        std::default_random_engine& rng
+        std::mt19937& rng
         ) {
     std::vector<Sudoku> solutions;
     // reset in case of previous random search
@@ -159,7 +160,7 @@ bool Sudoku<N>::inner_solve(
         Hints<N>& hints,
         std::vector<Sudoku<N>>& solutions,
         SolveMode mode,
-        std::default_random_engine& rng
+        std::mt19937& rng
         ) {
     // find best starting cell
     int best_i = 0;

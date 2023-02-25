@@ -8,7 +8,7 @@
 
 
 template<int N>
-Field<int, N> random_partial_field(std::default_random_engine& rng) {
+Field<int, N> random_partial_field(std::mt19937& rng) {
     Field<int, N> field = fill_field<int, N>(0);
 
     std::array<int, N*N> row;
@@ -28,7 +28,7 @@ Field<int, N> random_partial_field(std::default_random_engine& rng) {
 
 
 template<int N>
-Sudoku<N> generate_filled_sudoku(std::default_random_engine& rng) {
+Sudoku<N> generate_filled_sudoku(std::mt19937& rng) {
     Sudoku<N> sudoku(random_partial_field<N>(rng));
     std::vector<Sudoku<N>> solutions = sudoku.solve(random_first, rng);
     return solutions[0];
@@ -38,7 +38,7 @@ Sudoku<N> generate_filled_sudoku(std::default_random_engine& rng) {
 template<int N>
 Sudoku<N> make_minimal(
         const Sudoku<N>& filled,
-        std::default_random_engine& rng
+        std::mt19937& rng
         ) {
     Sudoku<N> minimal;
     std::array<int, N*N*N*N> clue_order;
@@ -114,7 +114,7 @@ Sudoku<N> make_minimal(
 
 template<int N>
 std::pair<Sudoku<N>, Sudoku<N>> generate_minimal_sudoku(
-        std::default_random_engine& rng
+        std::mt19937& rng
         ) {
     Sudoku<N> filled = generate_filled_sudoku<N>(rng);
     Sudoku<N> minimal = make_minimal<N>(filled, rng);
