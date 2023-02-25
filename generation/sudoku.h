@@ -164,43 +164,55 @@ bool Sudoku<N>::inner_solve(
     // find best starting cell
     int best_i = 0;
     int best_j = 0;
-    int clues = N*N+1;
-    bool solved = true;
-    // TODO: this may be further improved by first looping the trivial
-    // fill and only afterwards looking for the branching point
-    for (int i=0; i < N*N; ++i) {
-        for (int j=0; j < N*N; ++j) {
-            if (this->field[i][j] != 0) {
-                continue;
-            }
-            int last_k = 0;
-            int current_clues = 0;
-            for (int k=1; k <= N*N; ++k) {
-                if (hints[i][j][k]) {
-                    current_clues++;
-                    last_k = k;
+    bool updated = false;
+
+    do {
+        // this do-while loop doesn't seem to influence speed in praxis
+        updated = false;
+        int clues = N*N+1;
+        bool solved = true; // hope for the best
+
+        for (int i=0; i < N*N; ++i) {
+            for (int j=0; j < N*N; ++j) {
+                if (this->field[i][j] != 0) {
+                    continue;
+                }
+                int last_k = 0; // for trivial fill only
+                int current_clues = 0;
+                for (int k=1; k <= N*N; ++k) {
+                    if (hints[i][j][k]) {
+                        current_clues++;
+                        last_k = k;
+                    }
+                }
+
+                if (current_clues == 1) {
+                    // trivial fill
+                    this->field[i][j] = last_k;
+                    remove_hint<N>(hints, i, j, last_k);
+                    updated = true;
+                    // -> new possibilities might be earlier in the
+                    // grid, so look for trivial fills a second time
+                } else if (current_clues == 0) {
+                    // no candidate solution left for this cell
+                    return false;
+                } else if (current_clues < clues) {
+                    // non-trivial cell
+                    solved = false;
+                    best_i = i;
+                    best_j = j;
+                    clues = current_clues;
                 }
             }
-            if (current_clues == 1) {
-                // trivial fill
-                this->field[i][j] = last_k;
-                remove_hint<N>(hints, i, j, last_k);
-            } else if (current_clues == 0) {
-                return false;
-            } else if (current_clues < clues) {
-                solved = false;
-                best_i = i;
-                best_j = j;
-                clues = current_clues;
-            }
         }
-    }
-    if (solved) {    
-        // all cells are filled
-        solutions.push_back(*this);
-        return ((mode == random_first)
-                or (mode == two and solutions.size() > 1));
-    }
+
+        if (solved) {
+            // all cells are filled
+            solutions.push_back(*this);
+            return ((mode == random_first)
+                    or (mode == two and solutions.size() > 1));
+        }
+    } while (updated);
 
     if (mode == random_first) {
         std::shuffle(
