@@ -7,6 +7,8 @@
 #include <numeric>
 #include <random>
 #include <string>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 // N is square root of field length, e.g. 3 for a standard 9x9 sudoku
@@ -66,6 +68,11 @@ class Sudoku {
             SolveMode,
             std::mt19937&
             );
+        bool random_solve(
+            Hints<N>&,
+            std::vector<Sudoku<N>>&,
+            std::mt19937&
+            );
 };
 
 
@@ -114,6 +121,7 @@ std::vector<Sudoku<N>> Sudoku<N>::solve() {
     return this->solve(all);
 }
 
+
 template <int N>
 std::vector<Sudoku<N>> Sudoku<N>::solve(SolveMode mode) {
     std::vector<Sudoku> solutions;
@@ -135,7 +143,12 @@ std::vector<Sudoku<N>> Sudoku<N>::solve(
     Hints<N> hints = this->gen_hints();
     // do not change this sudoku itself:
     Sudoku<N> cp(*this);
-    cp.inner_solve(hints, solutions, mode, rng);
+
+    if (mode == random_first) {
+        cp.random_solve(hints, solutions, rng);
+    } else {
+        cp.inner_solve(hints, solutions, mode, rng);
+    }
     return solutions;
 }
 
@@ -162,6 +175,13 @@ bool Sudoku<N>::inner_solve(
         SolveMode mode,
         std::mt19937& rng
         ) {
+    // Strategy:
+    // -- Fill all cells with a single hint in them
+    // -- Find cell with fewest hints available
+    // -- Try all possible combinations for that cell and call inner_solve
+
+    // TODO: convert recursion to stack and see if that speeds it up
+
     // find best starting cell
     int best_i = 0;
     int best_j = 0;
@@ -238,6 +258,100 @@ bool Sudoku<N>::inner_solve(
         remove_hint<N>(hints_cp, best_i, best_j, k);
 
         if (current.inner_solve(hints_cp, solutions, mode, rng)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+template <int N>
+bool Sudoku<N>::random_solve(
+        Hints<N>& hints,
+        std::vector<Sudoku<N>>& solutions,
+        std::mt19937& rng
+        ) {
+    // NOTE: this is the same as inner_solve with the difference that a random
+    // place is chosen as branching point instead of the first to decrease
+    // spatial correlations
+
+    // find best starting cell
+    bool updated = false;
+    std::vector<std::pair<int, int>> bests;
+
+    do {
+        // this do-while loop doesn't seem to influence speed in praxis
+        updated = false;
+        bests = {};
+        int clues = N*N+1;
+        bool solved = true; // hope for the best
+
+        for (int i=0; i < N*N; ++i) {
+            for (int j=0; j < N*N; ++j) {
+                if (this->field[i][j] != 0) {
+                    continue;
+                }
+                int last_k = 0; // for trivial fill only
+                int current_clues = 0;
+                for (int k=1; k <= N*N; ++k) {
+                    if (hints[i][j][k]) {
+                        current_clues++;
+                        last_k = k;
+                    }
+                }
+
+                if (current_clues == 1) {
+                    // trivial fill
+                    this->field[i][j] = last_k;
+                    remove_hint<N>(hints, i, j, last_k);
+                    updated = true;
+                    // -> new possibilities might be earlier in the
+                    // grid, so look for trivial fills a second time
+                } else if (current_clues == 0) {
+                    // no candidate solution left for this cell
+                    return false;
+                } else if (current_clues < clues) {
+                    // non-trivial cell
+                    solved = false;
+                    clues = current_clues;
+                    bests = {std::make_pair(i, j)};
+                } else if (current_clues == clues) {
+                    bests.push_back(std::make_pair(i, j));
+                }
+            }
+        }
+        if (solved) {
+            // all cells are filled
+            solutions.push_back(*this);
+            return true;
+        }
+    } while (updated);
+
+    int idx = std::uniform_int_distribution<>(0, bests.size()-1)(rng);
+    int best_i, best_j;
+    std::tie(best_i, best_j) = bests[idx];
+    std::shuffle(
+        std::begin(this->posibilities),
+        std::end(this->posibilities),
+        rng
+    );
+    // try all posibilities
+    // std::vector<Sudoku<N>> solutions;
+    for (int kk=0; kk < N*N; ++kk) {
+        int k = this->posibilities[kk];
+        if (not hints[best_i][best_j][k]) {
+            continue;
+        }
+        // copy
+        Sudoku<N> current(*this);
+        Hints<N> hints_cp(hints);
+
+        // insert k into copies
+        current.field[best_i][best_j] = k;
+        remove_hint<N>(hints_cp, best_i, best_j, k);
+
+        if (current.random_solve(hints_cp, solutions, rng)) {
             return true;
         }
     }
