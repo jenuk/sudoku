@@ -56,6 +56,8 @@ class Sudoku {
             std::mt19937&
             );
 
+        void flip();
+
         static bool pprint; // pretty print vs comptact print
 
     private:
@@ -78,6 +80,11 @@ class Sudoku {
 
 template <int N>
 bool Sudoku<N>::pprint = true;
+
+template <int N>
+void Sudoku<N>::flip() {
+    std::reverse(std::begin(this->field), std::end(this->field));
+}
 
 
 template <int N>
