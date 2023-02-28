@@ -2,7 +2,9 @@
 #define SUDOKU_GENERATOR_H
 
 #include <random>
+#include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "sudoku.h"
 
@@ -34,11 +36,137 @@ Field<int, N> random_partial_field(std::mt19937& rng) {
 }
 
 
+template<>
+Field<int, 3> random_partial_field<3>(std::mt19937& rng) {
+    // specific optimization for 9x9 sudokus
+    // each cell has at most 6 possible entries
+    // small branching factor allows for (hopefully) unbiased generation
+    Field<int, 3> field = fill_field<int, 3>(0);
+
+    std::array<int, 9> nums;
+    std::iota(std::begin(nums), std::end(nums), 1);
+    std::shuffle(nums.begin(), nums.end(), rng);
+    // fill first nums randomly
+    for (int k=0; k < 9; ++k) {
+        field[k][0] = nums[k];
+    }
+    // fill first box randomly with remaining numbers
+    std::shuffle(nums.begin()+3, nums.end(), rng);
+    for (int k=3; k < 9; ++k) {
+        field[k%3][k/3] = nums[k];
+    }
+
+    // fill second row of second and third box in a valid way
+    std::vector<int> bucket1;
+    std::vector<int> bucket2;
+
+    std::shuffle(nums.begin(), nums.begin()+3, rng);
+    std::unordered_set<int> set1 = {field[3][0], field[4][0], field[5][0]};
+    for (int k=0; k < 3; ++k) {
+        if (set1.find(field[k][2]) != set1.end()) {
+            bucket2.push_back(field[k][2]);
+            bucket1.push_back(nums[k]);
+        } else {
+            bucket1.push_back(field[k][2]);
+            bucket2.push_back(nums[k]);
+        }
+    }
+    std::shuffle(bucket1.begin(), bucket1.end(), rng);
+    std::shuffle(bucket2.begin(), bucket2.end(), rng);
+    for (int k=0; k < 3; ++k) {
+        field[k+3][1] = bucket1[k];
+        field[k+6][1] = bucket2[k];
+    }
+
+    // finish third row
+    std::unordered_set<int> set2 = {field[0][2], field[1][2], field[2][2]};
+    set1.insert(field[3][1]);
+    set1.insert(field[4][1]);
+    set1.insert(field[5][1]);
+    std::shuffle(nums.begin(), nums.end(), rng);
+    bucket1 = {};
+    bucket2 = {};
+    for (int i=0; i < 9; ++i) {
+        int k = nums[i];
+        if (set2.find(k) != set2.end()) {
+            // already in this nums
+        } else if (set1.find(k) != set1.end()) {
+            // number is in box 1
+            bucket2.push_back(k);
+        } else {
+            bucket1.push_back(k);
+        }
+    }
+    for (int k=0; k < 3; ++k) {
+        field[k+3][2] = bucket1[k];
+        field[k+6][2] = bucket2[k];
+    }
+
+    // repeat for first three columns
+    nums = {
+        field[0][0], field[0][1], field[0][2],
+        field[1][0], field[1][1], field[1][2],
+        field[2][0], field[2][1], field[2][2]
+    };
+    std::shuffle(nums.begin()+3, nums.end(), rng);
+    for (int k=3; k < 9; ++k) {
+        field[0][k] = nums[k];
+    }
+
+    // fill second column of second and third box in a valid way
+    bucket1 = {};
+    bucket2 = {};
+
+    std::shuffle(nums.begin(), nums.begin()+3, rng);
+    set1 = {field[0][3], field[0][4], field[0][5]};
+    for (int k=0; k < 3; ++k) {
+        if (set1.find(field[2][k]) != set1.end()) {
+            bucket2.push_back(field[2][k]);
+            bucket1.push_back(nums[k]);
+        } else {
+            bucket1.push_back(field[2][k]);
+            bucket2.push_back(nums[k]);
+        }
+    }
+    std::shuffle(bucket1.begin(), bucket1.end(), rng);
+    std::shuffle(bucket2.begin(), bucket2.end(), rng);
+    for (int k=0; k < 3; ++k) {
+        field[1][k+3] = bucket1[k];
+        field[1][k+6] = bucket2[k];
+    }
+
+    // finish third col
+    set2 = {field[2][0], field[2][1], field[2][2]};
+    set1.insert(field[1][3]);
+    set1.insert(field[1][4]);
+    set1.insert(field[1][5]);
+    std::shuffle(nums.begin(), nums.end(), rng);
+    bucket1 = {};
+    bucket2 = {};
+    for (int i=0; i < 9; ++i) {
+        int k = nums[i];
+        if (set2.find(k) != set2.end()) {
+            // already in this nums
+        } else if (set1.find(k) != set1.end()) {
+            // number is in box 1
+            bucket2.push_back(k);
+        } else {
+            bucket1.push_back(k);
+        }
+    }
+    for (int k=0; k < 3; ++k) {
+        field[2][k+3] = bucket1[k];
+        field[2][k+6] = bucket2[k];
+    }
+
+    return field;
+}
+
+
 template<int N>
 Sudoku<N> generate_filled_sudoku(std::mt19937& rng) {
     Sudoku<N> sudoku(random_partial_field<N>(rng));
     std::vector<Sudoku<N>> solutions = sudoku.solve(random_first, rng);
-    solutions[0].flip();
     return solutions[0];
 }
 

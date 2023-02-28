@@ -29,6 +29,7 @@ Field<T, N> fill_field(const T& fill_val) {
 
 enum SolveMode {
     all,
+    any,
     two,
     random_first,
 };
@@ -44,6 +45,9 @@ class Sudoku {
         std::vector<Sudoku> solve(SolveMode);
         std::vector<Sudoku> solve(SolveMode, std::mt19937&);
         bool is_unique();
+        bool is_solveable();
+        bool is_valid();
+        bool is_solved();
 
         template <int M>
         friend std::ostream& operator<<(std::ostream&, const Sudoku<M>&);
@@ -167,6 +171,54 @@ bool Sudoku<N>::is_unique() {
 
 
 template <int N>
+bool Sudoku<N>::is_solveable() {
+    return this->solve(any).size() > 0;
+}
+
+
+template <int N>
+bool Sudoku<N>::is_valid() {
+    for (int i=0; i < N*N; ++i) {
+        for (int j=0; j < N*N; ++j) {
+            if (this->field[i][j] == 0) {
+                continue;
+            }
+
+            int x = this->field[i][j];
+            int bi = N*(i/N);
+            int bj = N*(j/N);
+            for (int k=0; k < N*N; ++k) {
+                if (j!=k and this->field[i][k] == x) {
+                    return false;
+                } else if (i!=k and this->field[k][j] == x) {
+                    return false;
+                } else if (bi+k/N!=i and bj+k%N!=j
+                        and this->field[bi+k/N][bj+k%N] == x) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+
+template <int N>
+bool Sudoku<N>::is_solved() {
+    for (int i=0; i < N*N; ++i) {
+        for (int j=0; j < N*N; ++j) {
+            if (this->field[i][j] == 0) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+
+template <int N>
 void remove_hint(Hints<N>& hints, int i, int j, int k) {
     for (int x=0; x < N*N; ++x) {
         hints[i][x][k] = false;
@@ -237,7 +289,7 @@ bool Sudoku<N>::inner_solve(
         if (solved) {
             // all cells are filled
             solutions.push_back(*this);
-            return ((mode == random_first)
+            return ((mode == any) or (mode == random_first)
                     or (mode == two and solutions.size() > 1));
         }
     } while (updated);
@@ -282,16 +334,16 @@ bool Sudoku<N>::random_solve(
     // NOTE: this is the same as inner_solve with the difference that a random
     // place is chosen as branching point instead of the first to decrease
     // spatial correlations
+    // probably too slow for N > 3
 
     // find best starting cell
     bool updated = false;
-    std::vector<std::pair<int, int>> bests;
+    std::vector<std::pair<int, int>> positions;
 
     do {
         // this do-while loop doesn't seem to influence speed in praxis
         updated = false;
-        bests = {};
-        int clues = N*N+1;
+        positions = {};
         bool solved = true; // hope for the best
 
         for (int i=0; i < N*N; ++i) {
@@ -318,13 +370,9 @@ bool Sudoku<N>::random_solve(
                 } else if (current_clues == 0) {
                     // no candidate solution left for this cell
                     return false;
-                } else if (current_clues < clues) {
-                    // non-trivial cell
+                } else {
+                    positions.push_back(std::make_pair(i, j));
                     solved = false;
-                    clues = current_clues;
-                    bests = {std::make_pair(i, j)};
-                } else if (current_clues == clues) {
-                    bests.push_back(std::make_pair(i, j));
                 }
             }
         }
@@ -335,9 +383,9 @@ bool Sudoku<N>::random_solve(
         }
     } while (updated);
 
-    int idx = std::uniform_int_distribution<>(0, bests.size()-1)(rng);
-    int best_i, best_j;
-    std::tie(best_i, best_j) = bests[idx];
+    int idx = std::uniform_int_distribution<>(0, positions.size()-1)(rng);
+    int p_i, p_j;
+    std::tie(p_i, p_j) = positions[idx];
     std::shuffle(
         std::begin(this->posibilities),
         std::end(this->posibilities),
@@ -347,7 +395,7 @@ bool Sudoku<N>::random_solve(
     // std::vector<Sudoku<N>> solutions;
     for (int kk=0; kk < N*N; ++kk) {
         int k = this->posibilities[kk];
-        if (not hints[best_i][best_j][k]) {
+        if (not hints[p_i][p_j][k]) {
             continue;
         }
         // copy
@@ -355,8 +403,8 @@ bool Sudoku<N>::random_solve(
         Hints<N> hints_cp(hints);
 
         // insert k into copies
-        current.field[best_i][best_j] = k;
-        remove_hint<N>(hints_cp, best_i, best_j, k);
+        current.field[p_i][p_j] = k;
+        remove_hint<N>(hints_cp, p_i, p_j, k);
 
         if (current.random_solve(hints_cp, solutions, rng)) {
             return true;

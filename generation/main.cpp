@@ -56,5 +56,10 @@ int main(int argc, char** argv){
     std::cout << "Last sudoku:\n" << minimal << "\n\nSolution:\n"
         << filled << std::endl;
 
+    std::cout << "Is valid (puzzle): " << minimal.is_valid() << std::endl;
+    std::cout << "Is unique and solveable (puzzle): " << minimal.is_unique() << std::endl;
+    std::cout << "Is valid (solution): " << filled.is_valid() << std::endl;
+    std::cout << "Is solved (solution): " << filled.is_solved() << std::endl;
+
     return 0;
 }
