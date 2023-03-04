@@ -86,6 +86,7 @@ int main(int argc, char** argv){
     std::cout << "Is unique and solveable (puzzle): " << minimal.is_unique() << std::endl;
     std::cout << "Is valid (solution): " << filled.is_valid() << std::endl;
     std::cout << "Is solved (solution): " << filled.is_solved() << std::endl;
+    std::cout << "Puzzle part of solution: " << (minimal <= filled) << std::endl;
 
     return 0;
 }

@@ -40,19 +40,20 @@ class Sudoku {
         Sudoku();
         Sudoku(Field<int, N>);
 
-        Hints<N> gen_hints();
-        std::vector<Sudoku> solve();
-        std::vector<Sudoku> solve(SolveMode);
-        std::vector<Sudoku> solve(SolveMode, std::mt19937&);
-        bool is_unique();
-        bool is_solveable();
-        bool is_valid();
-        bool is_solved();
+        Hints<N> gen_hints() const;
+        std::vector<Sudoku> solve() const;
+        std::vector<Sudoku> solve(SolveMode) const;
+        std::vector<Sudoku> solve(SolveMode, std::mt19937&) const;
 
-        template <int M>
-        friend std::ostream& operator<<(std::ostream&, const Sudoku<M>&);
-        template <int M>
-        friend std::istream& operator>>(std::istream&, Sudoku<M>&);
+        bool is_unique() const;
+        bool is_solveable() const;
+        bool is_valid() const;
+        bool is_solved() const;
+
+        void flip();
+
+        // partial ordering
+        bool operator<=(const Sudoku<N>&) const;
 
         template <int M>
         friend Sudoku<M> make_minimal(
@@ -60,7 +61,10 @@ class Sudoku {
             std::mt19937&
             );
 
-        void flip();
+        template <int M>
+        friend std::ostream& operator<<(std::ostream&, const Sudoku<M>&);
+        template <int M>
+        friend std::istream& operator>>(std::istream&, Sudoku<M>&);
 
         static bool pprint; // pretty print vs comptact print
 
@@ -71,8 +75,7 @@ class Sudoku {
         bool inner_solve(
             Hints<N>&,
             std::vector<Sudoku<N>>&,
-            SolveMode,
-            std::mt19937&
+            SolveMode
             );
         bool random_solve(
             Hints<N>&,
@@ -90,19 +93,20 @@ void Sudoku<N>::flip() {
     std::reverse(std::begin(this->field), std::end(this->field));
 }
 
-
 template <int N>
 Sudoku<N>::Sudoku() {
+    std::iota(std::begin(this->posibilities), std::end(this->posibilities), 1);
     this->field = fill_field<int, N>(0);
 }
 
 template <int N>
 Sudoku<N>::Sudoku(Field<int, N> field) {
+    std::iota(std::begin(this->posibilities), std::end(this->posibilities), 1);
     this->field = field;
 }
 
 template <int N>
-Hints<N> Sudoku<N>::gen_hints() {
+Hints<N> Sudoku<N>::gen_hints() const {
     std::array<bool, N*N+1> full_hint;
     full_hint.fill(true);
     full_hint[0] = false;
@@ -128,18 +132,26 @@ Hints<N> Sudoku<N>::gen_hints() {
 
 
 template <int N>
-std::vector<Sudoku<N>> Sudoku<N>::solve() {
+std::vector<Sudoku<N>> Sudoku<N>::solve() const {
     return this->solve(all);
 }
 
 
 template <int N>
-std::vector<Sudoku<N>> Sudoku<N>::solve(SolveMode mode) {
+std::vector<Sudoku<N>> Sudoku<N>::solve(SolveMode mode) const {
     std::vector<Sudoku> solutions;
-    // reset in case of previous random search
-    std::random_device rd;
-    std::mt19937 rng(rd());
-    return this->solve(mode, rng);
+    Hints<N> hints = this->gen_hints();
+    // do not change this sudoku itself:
+    Sudoku<N> cp(*this);
+
+    if (mode == random_first) {
+        std::random_device rd;
+        std::mt19937 rng(rd());
+        cp.random_solve(hints, solutions, rng);
+    } else {
+        cp.inner_solve(hints, solutions, mode);
+    }
+    return solutions;
 }
 
 
@@ -147,10 +159,9 @@ template <int N>
 std::vector<Sudoku<N>> Sudoku<N>::solve(
         SolveMode mode,
         std::mt19937& rng
-        ) {
+        ) const {
     std::vector<Sudoku> solutions;
     // reset in case of previous random search
-    std::iota(std::begin(posibilities), std::end(posibilities), 1);
     Hints<N> hints = this->gen_hints();
     // do not change this sudoku itself:
     Sudoku<N> cp(*this);
@@ -158,26 +169,26 @@ std::vector<Sudoku<N>> Sudoku<N>::solve(
     if (mode == random_first) {
         cp.random_solve(hints, solutions, rng);
     } else {
-        cp.inner_solve(hints, solutions, mode, rng);
+        cp.inner_solve(hints, solutions, mode);
     }
     return solutions;
 }
 
 
 template <int N>
-bool Sudoku<N>::is_unique() {
+bool Sudoku<N>::is_unique() const {
     return this->solve(two).size() == 1;
 }
 
 
 template <int N>
-bool Sudoku<N>::is_solveable() {
+bool Sudoku<N>::is_solveable() const {
     return this->solve(any).size() > 0;
 }
 
 
 template <int N>
-bool Sudoku<N>::is_valid() {
+bool Sudoku<N>::is_valid() const {
     for (int i=0; i < N*N; ++i) {
         for (int j=0; j < N*N; ++j) {
             if (this->field[i][j] == 0) {
@@ -205,10 +216,25 @@ bool Sudoku<N>::is_valid() {
 
 
 template <int N>
-bool Sudoku<N>::is_solved() {
+bool Sudoku<N>::is_solved() const {
     for (int i=0; i < N*N; ++i) {
         for (int j=0; j < N*N; ++j) {
             if (this->field[i][j] == 0) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+
+template <int N>
+bool Sudoku<N>::operator<=(const Sudoku<N>& other) const {
+    for (int i=0; i < N*N; ++i) {
+        for (int j=0; j < N*N; ++j) {
+            if (this->field[i][j] != 0
+                    and this->field[i][j] != other.field[i][j]) {
                 return false;
             }
         }
@@ -231,8 +257,7 @@ template <int N>
 bool Sudoku<N>::inner_solve(
         Hints<N>& hints,
         std::vector<Sudoku<N>>& solutions,
-        SolveMode mode,
-        std::mt19937& rng
+        SolveMode mode
         ) {
     // Strategy:
     // -- Fill all cells with a single hint in them
@@ -289,22 +314,13 @@ bool Sudoku<N>::inner_solve(
         if (solved) {
             // all cells are filled
             solutions.push_back(*this);
-            return ((mode == any) or (mode == random_first)
+            return ((mode == any)
                     or (mode == two and solutions.size() > 1));
         }
     } while (updated);
 
-    if (mode == random_first) {
-        std::shuffle(
-            std::begin(this->posibilities),
-            std::end(this->posibilities),
-            rng
-        );
-    }
     // try all posibilities
-    // std::vector<Sudoku<N>> solutions;
-    for (int kk=0; kk < N*N; ++kk) {
-        int k = this->posibilities[kk];
+    for (int k=0; k < N*N; ++k) {
         if (not hints[best_i][best_j][k]) {
             continue;
         }
@@ -316,7 +332,7 @@ bool Sudoku<N>::inner_solve(
         current.field[best_i][best_j] = k;
         remove_hint<N>(hints_cp, best_i, best_j, k);
 
-        if (current.inner_solve(hints_cp, solutions, mode, rng)) {
+        if (current.inner_solve(hints_cp, solutions, mode)) {
             return true;
         }
     }
