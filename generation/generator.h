@@ -1,6 +1,7 @@
 #ifndef SUDOKU_GENERATOR_H
 #define SUDOKU_GENERATOR_H
 
+#include <iostream>
 #include <random>
 #include <unordered_set>
 #include <utility>
@@ -14,23 +15,16 @@ Field<int, N> random_partial_field(std::mt19937& rng) {
     Field<int, N> field = fill_field<int, N>(0);
 
     std::array<int, N*N> row;
-    std::iota(std::begin(row), std::end(row), 1);
-    std::shuffle(
-        std::begin(row),
-        std::end(row),
-        rng
-    );
+    std::iota(std::begin(row), std::end(row), 0);
+    std::shuffle(std::begin(row), std::end(row), rng);
+
     std::array<int, N*N> col;
-    std::iota(std::begin(col), std::end(col), 1);
-    std::shuffle(
-        std::begin(col),
-        std::end(col),
-        rng
-    );
+    std::iota(std::begin(col), std::end(col), 0);
+    std::shuffle(std::begin(col), std::end(col), rng);
+
     for (int k=0; k < N*N; ++k) {
-        field[row[k]][col[k]] = k;
+        field[row[k]][col[k]] = k+1;
     }
-    // all further construction seems too slow to justify the further speed up
 
     return field;
 }
@@ -166,8 +160,21 @@ Field<int, 3> random_partial_field<3>(std::mt19937& rng) {
 template<int N>
 Sudoku<N> generate_filled_sudoku(std::mt19937& rng) {
     Sudoku<N> sudoku(random_partial_field<N>(rng));
-    std::vector<Sudoku<N>> solutions = sudoku.solve(random_first, rng);
-    return solutions[0];
+    // std::vector<Sudoku<N>> solutions = sudoku.solve(random_first, rng);
+    std::vector<Sudoku<N>> solutions = sudoku.solve(all);
+    if (solutions.size() == 0) {
+        // This shouldn't happen if the solver works
+        std::cout << "Failed initial generation for:" << std::endl;
+        bool status = Sudoku<N>::pprint;
+        Sudoku<N>::pprint = true;
+        std::cout << sudoku << std::endl;
+        Sudoku<N>::pprint = status;
+        return generate_filled_sudoku<N>(rng);
+    } else {
+        // return solutions[0];
+        int idx = std::uniform_int_distribution<>(0, solutions.size()-1)(rng);
+        return solutions[idx];
+    }
 }
 
 
@@ -184,8 +191,8 @@ Sudoku<N> make_minimal(
         std::end(clue_order),
         rng
     );
-    // Applying a symmetry to the clue order results in a sudoku
-    // with partially that symmetry.
+    // Applying a symmetry to the clue order (probably, not tested) results in
+    // a sudoku with partially that symmetry.
 
     // **Part 1**
     // remove as many clues as possible without checking every one
@@ -227,7 +234,7 @@ Sudoku<N> make_minimal(
     // **Part 2**
     // check for every remaining clue if it is really necessary in context
     // Number of solves: O(upper), in general O(N^4)
-    // (N^4 number of fields)
+    // (N^4 number of cells in field)
     for (int k=upper-1; k>0; --k) {
         int i = clue_order[k]%(N*N);
         int j = clue_order[k]/(N*N);

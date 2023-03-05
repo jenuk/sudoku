@@ -49,11 +49,15 @@ class Sudoku {
         bool is_solveable() const;
         bool is_valid() const;
         bool is_solved() const;
+        int num_clues() const;
 
         void flip();
 
         // partial ordering
+        // is equal or less filled in version of other
         bool operator<=(const Sudoku<N>&) const;
+        // is less filled in version of other
+        bool operator<(const Sudoku<N>&) const;
 
         template <int M>
         friend Sudoku<M> make_minimal(
@@ -72,11 +76,11 @@ class Sudoku {
         Field<int, N> field;
         std::array<int, N*N> posibilities;
 
-        bool inner_solve(
+        void inner_solve(
             Hints<N>&,
             std::vector<Sudoku<N>>&,
             SolveMode
-            );
+            ) const;
         bool random_solve(
             Hints<N>&,
             std::vector<Sudoku<N>>&,
@@ -141,15 +145,16 @@ template <int N>
 std::vector<Sudoku<N>> Sudoku<N>::solve(SolveMode mode) const {
     std::vector<Sudoku> solutions;
     Hints<N> hints = this->gen_hints();
-    // do not change this sudoku itself:
-    Sudoku<N> cp(*this);
 
     if (mode == random_first) {
+        // do not change this sudoku itself
+        Sudoku<N> cp(*this);
+        // this should be avoided if possible
         std::random_device rd;
         std::mt19937 rng(rd());
         cp.random_solve(hints, solutions, rng);
     } else {
-        cp.inner_solve(hints, solutions, mode);
+        this->inner_solve(hints, solutions, mode);
     }
     return solutions;
 }
@@ -161,15 +166,14 @@ std::vector<Sudoku<N>> Sudoku<N>::solve(
         std::mt19937& rng
         ) const {
     std::vector<Sudoku> solutions;
-    // reset in case of previous random search
     Hints<N> hints = this->gen_hints();
-    // do not change this sudoku itself:
-    Sudoku<N> cp(*this);
 
     if (mode == random_first) {
+        // do not change this sudoku itself:
+        Sudoku<N> cp(*this);
         cp.random_solve(hints, solutions, rng);
     } else {
-        cp.inner_solve(hints, solutions, mode);
+        this->inner_solve(hints, solutions, mode);
     }
     return solutions;
 }
@@ -230,11 +234,42 @@ bool Sudoku<N>::is_solved() const {
 
 
 template <int N>
+int Sudoku<N>::num_clues() const {
+    int num = 0;
+    for (int i=0; i < N*N; ++i) {
+        for (int j=0; j < N*N; ++j) {
+            if (this->field[i][j] != 0) {
+                ++num;
+            }
+        }
+    }
+
+    return num;
+}
+
+
+template <int N>
 bool Sudoku<N>::operator<=(const Sudoku<N>& other) const {
     for (int i=0; i < N*N; ++i) {
         for (int j=0; j < N*N; ++j) {
             if (this->field[i][j] != 0
                     and this->field[i][j] != other.field[i][j]) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+template <int N>
+bool Sudoku<N>::operator<(const Sudoku<N>& other) const {
+    bool is_less = false;
+    for (int i=0; i < N*N; ++i) {
+        for (int j=0; j < N*N; ++j) {
+            if (this->field[i][j] == 0) {
+                is_less = is_less or other.field[i][j] != 0;
+            } else if (this->field[i][j] != other.field[i][j]) {
                 return false;
             }
         }
@@ -254,90 +289,87 @@ void remove_hint(Hints<N>& hints, int i, int j, int k) {
 }
 
 template <int N>
-bool Sudoku<N>::inner_solve(
+void Sudoku<N>::inner_solve(
         Hints<N>& hints,
         std::vector<Sudoku<N>>& solutions,
         SolveMode mode
-        ) {
+        ) const {
     // Strategy:
     // -- Fill all cells with a single hint in them
-    // -- Find cell with fewest hints available
-    // -- Try all possible combinations for that cell and call inner_solve
+    // -- Find last cell with fewest hints available
+    // -- Try all possible combinations for that cell
 
-    // TODO: convert recursion to stack and see if that speeds it up
+    std::vector<std::pair<Sudoku<N>, Hints<N>>> stack = {std::make_pair(*this, hints)};
+    // max length at most O(N^6), maybe a lower bound exists
 
-    // find best starting cell
-    int best_i = 0;
-    int best_j = 0;
-    bool updated = false;
+    while (stack.size() > 0) {
+        Sudoku<N> current;
+        std::tie(current, hints) = stack.back();
+        stack.pop_back();
 
-    do {
-        // this do-while loop doesn't seem to influence speed in praxis
-        updated = false;
-        int clues = N*N+1;
-        bool solved = true; // hope for the best
+        // find best starting cell
+        int best_i = 0;
+        int best_j = 0;
+        int clues = N*N+1; // max number of clues == N*N
 
         for (int i=0; i < N*N; ++i) {
             for (int j=0; j < N*N; ++j) {
-                if (this->field[i][j] != 0) {
+                if (current.field[i][j] != 0) {
                     continue;
                 }
                 int last_k = 0; // for trivial fill only
                 int current_clues = 0;
                 for (int k=1; k <= N*N; ++k) {
                     if (hints[i][j][k]) {
-                        current_clues++;
+                        ++current_clues;
                         last_k = k;
                     }
                 }
 
                 if (current_clues == 1) {
                     // trivial fill
-                    this->field[i][j] = last_k;
+                    current.field[i][j] = last_k;
                     remove_hint<N>(hints, i, j, last_k);
-                    updated = true;
-                    // -> new possibilities might be earlier in the
-                    // grid, so look for trivial fills a second time
+                    // revisiting previous cells doesn't seem to speed it up
                 } else if (current_clues == 0) {
                     // no candidate solution left for this cell
-                    return false;
-                } else if (current_clues < clues) {
-                    // non-trivial cell
-                    solved = false;
+                    // there is no way to solve this sudoku with the current
+                    // hints.
+                    // goto goes to next element in stack, i.e. a continue for
+                    // the outer while loop, sorry
+                    goto next;
+                } else if (current_clues <= clues) {
                     best_i = i;
                     best_j = j;
                     clues = current_clues;
                 }
             }
         }
-
-        if (solved) {
+        // no location found to fill in
+        if (clues == N*N+1) {
             // all cells are filled
-            solutions.push_back(*this);
-            return ((mode == any)
-                    or (mode == two and solutions.size() > 1));
+            solutions.push_back(current);
+            if ((mode == any) or (mode == two and solutions.size() > 1)) {
+                // suffieciently many solutions found to stop now
+                return;
+            } else {
+                continue;
+            }
         }
-    } while (updated);
 
-    // try all posibilities
-    for (int k=0; k < N*N; ++k) {
-        if (not hints[best_i][best_j][k]) {
-            continue;
+        // try all posibilities
+        for (int k=1; k <= N*N; ++k) {
+            if (not hints[best_i][best_j][k]) {
+                continue;
+            }
+            // stack creates a copy
+            stack.push_back(std::make_pair(current, hints));
+            // insert k into copies
+            remove_hint<N>(stack.back().second, best_i, best_j, k);
+            stack.back().first.field[best_i][best_j] = k;
         }
-        // copy
-        Sudoku<N> current(*this);
-        Hints<N> hints_cp(hints);
-
-        // insert k into copies
-        current.field[best_i][best_j] = k;
-        remove_hint<N>(hints_cp, best_i, best_j, k);
-
-        if (current.inner_solve(hints_cp, solutions, mode)) {
-            return true;
-        }
+        next:;
     }
-
-    return false;
 }
 
 

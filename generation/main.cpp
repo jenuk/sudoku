@@ -76,17 +76,16 @@ int main(int argc, char** argv){
     std::cout << "Generated " << n << "  sudokus in " << format_ns(dt)
         << " i.e. " << format_ns(dt / n) << " for a Sudoku\n" << std::endl;
 
-
-
     Sudoku<N>::pprint = true;
     std::cout << "Last sudoku:\n" << minimal << "\n\nSolution:\n"
         << filled << std::endl;
 
-    std::cout << "Is valid (puzzle): " << minimal.is_valid() << std::endl;
+    std::cout << "Number of clues: " << minimal.num_clues() << std::endl;
     std::cout << "Is unique and solveable (puzzle): " << minimal.is_unique() << std::endl;
     std::cout << "Is valid (solution): " << filled.is_valid() << std::endl;
     std::cout << "Is solved (solution): " << filled.is_solved() << std::endl;
     std::cout << "Puzzle part of solution: " << (minimal <= filled) << std::endl;
+    std::cout << "Puzzle true part of solution: " << (minimal < filled) << std::endl;
 
     return 0;
 }

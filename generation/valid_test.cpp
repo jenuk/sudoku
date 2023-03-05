@@ -21,11 +21,11 @@ int main(){
     std::cout << "Is valid: " << sudoku.is_valid() << std::endl;
     std::cout << "Is solveable: " << sudoku.is_solveable() << std::endl;
     std::cout << "Is unique: " << sudoku.is_unique() << std::endl;
-    std::vector<Sudoku<N>> solutions = sudoku.solve(all, rng);
+    std::vector<Sudoku<N>> solutions = sudoku.solve(all);
     std::cout << "Number of solutions: " << solutions.size() << std::endl;
 
     for (int k=0; k < 1000; ++k) {
-        sudoku = random_partial_field<N>(rng);
+        sudoku = Sudoku<N>(random_partial_field<N>(rng));
         bool valid = sudoku.is_valid();
         bool solveable = sudoku.is_solveable();
         if (valid and solveable) {
