@@ -49,6 +49,7 @@ class Sudoku {
         bool is_solveable() const;
         bool is_valid() const;
         bool is_solved() const;
+        bool is_minimal() const;
         int num_clues() const;
 
         void flip();
@@ -226,6 +227,26 @@ bool Sudoku<N>::is_solved() const {
             if (this->field[i][j] == 0) {
                 return false;
             }
+        }
+    }
+
+    return true;
+}
+
+
+template <int N>
+bool Sudoku<N>::is_minimal() const {
+    Sudoku<N> cp(*this);
+    for (int i=0; i < N*N; ++i) {
+        for (int j=0; j < N*N; ++j) {
+            if (this->field[i][j] == 0) {
+                continue;
+            }
+            cp.field[i][j] = 0;
+            if (cp.is_unique()) {
+                return false;
+            }
+            cp.field[i][j] = this->field[i][j];
         }
     }
 

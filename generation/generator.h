@@ -160,8 +160,9 @@ Field<int, 3> random_partial_field<3>(std::mt19937& rng) {
 template<int N>
 Sudoku<N> generate_filled_sudoku(std::mt19937& rng) {
     Sudoku<N> sudoku(random_partial_field<N>(rng));
-    // std::vector<Sudoku<N>> solutions = sudoku.solve(random_first, rng);
-    std::vector<Sudoku<N>> solutions = sudoku.solve(all);
+    // Sudoku<N> sudoku(fill_field<int, N>(0));
+    std::vector<Sudoku<N>> solutions = sudoku.solve(random_first, rng);
+    // std::vector<Sudoku<N>> solutions = sudoku.solve(all);
     if (solutions.size() == 0) {
         // This shouldn't happen if the solver works
         std::cout << "Failed initial generation for:" << std::endl;
@@ -186,11 +187,7 @@ Sudoku<N> make_minimal(
     Sudoku<N> minimal;
     std::array<int, N*N*N*N> clue_order;
     std::iota(std::begin(clue_order), std::end(clue_order), 0);
-    std::shuffle(
-        std::begin(clue_order),
-        std::end(clue_order),
-        rng
-    );
+    std::shuffle(std::begin(clue_order), std::end(clue_order), rng);
     // Applying a symmetry to the clue order (probably, not tested) results in
     // a sudoku with partially that symmetry.
 
@@ -198,9 +195,9 @@ Sudoku<N> make_minimal(
     // remove as many clues as possible without checking every one
     // individually by using binary search
     // Number of solves: O(log(N))
-    int lower = 0;
-    int upper = clue_order.size();
-    int middle = (lower + upper) / 2;
+    int lower = 0; // with lower always not unique
+    int upper = clue_order.size(); // with upper-1 hints always unique
+    int middle = (lower + upper) / 2; // always middle-1 hints
     for (int k=0; k<middle; ++k) {
         int x = clue_order[k]%(N*N);
         int y = clue_order[k]/(N*N);
@@ -225,7 +222,7 @@ Sudoku<N> make_minimal(
         }
     }
 
-    for (int k=middle; k<=upper; ++k) {
+    for (int k=middle; k<upper; ++k) {
         int x = clue_order[k]%(N*N);
         int y = clue_order[k]/(N*N);
         minimal.field[x][y] = filled.field[x][y];
@@ -235,12 +232,9 @@ Sudoku<N> make_minimal(
     // check for every remaining clue if it is really necessary in context
     // Number of solves: O(upper), in general O(N^4)
     // (N^4 number of cells in field)
-    for (int k=upper-1; k>0; --k) {
+    for (int k=upper-1; k>=0; --k) {
         int i = clue_order[k]%(N*N);
         int j = clue_order[k]/(N*N);
-        if (minimal.field[i][j] == 0) {
-            continue;
-        }
         minimal.field[i][j] = 0;
         if (not minimal.is_unique()) {
             minimal.field[i][j] = filled.field[i][j];

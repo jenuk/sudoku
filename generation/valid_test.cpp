@@ -42,5 +42,18 @@ int main(){
     }
     std::cout << std::endl;
 
+    std::cout << "Test minimal generation" << std::endl;
+    Sudoku<N> minimal;
+    Sudoku<N> filled;
+    for (int k=0; k < 1000; ++k) {
+        std::tie(minimal, filled) = generate_minimal_sudoku<N>(rng);
+        if (minimal.is_minimal()) {
+            std::cout << ".";
+        } else {
+            std::cout << "#";
+        }
+    }
+    std::cout << std::endl;
+
     return 0;
 }
