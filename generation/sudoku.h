@@ -75,18 +75,17 @@ class Sudoku {
 
     private:
         Field<int, N> field;
-        std::array<int, N*N> posibilities;
 
         void inner_solve(
             Hints<N>&,
             std::vector<Sudoku<N>>&,
             SolveMode
             ) const;
-        bool random_solve(
+        void random_solve(
             Hints<N>&,
             std::vector<Sudoku<N>>&,
             std::mt19937&
-            );
+            ) const;
 };
 
 
@@ -100,13 +99,11 @@ void Sudoku<N>::flip() {
 
 template <int N>
 Sudoku<N>::Sudoku() {
-    std::iota(std::begin(this->posibilities), std::end(this->posibilities), 1);
     this->field = fill_field<int, N>(0);
 }
 
 template <int N>
 Sudoku<N>::Sudoku(Field<int, N> field) {
-    std::iota(std::begin(this->posibilities), std::end(this->posibilities), 1);
     this->field = field;
 }
 
@@ -170,9 +167,7 @@ std::vector<Sudoku<N>> Sudoku<N>::solve(
     Hints<N> hints = this->gen_hints();
 
     if (mode == random_first) {
-        // do not change this sudoku itself:
-        Sudoku<N> cp(*this);
-        cp.random_solve(hints, solutions, rng);
+        this->random_solve(hints, solutions, rng);
     } else {
         this->inner_solve(hints, solutions, mode);
     }
@@ -395,92 +390,86 @@ void Sudoku<N>::inner_solve(
 
 
 template <int N>
-bool Sudoku<N>::random_solve(
+void Sudoku<N>::random_solve(
         Hints<N>& hints,
         std::vector<Sudoku<N>>& solutions,
         std::mt19937& rng
-        ) {
+        ) const {
     // NOTE: this is the same as inner_solve with the difference that a random
     // place is chosen as branching point instead of the first to decrease
     // spatial correlations
     // probably too slow for N > 3
 
-    // find best starting cell
-    bool updated = false;
-    std::vector<std::pair<int, int>> positions;
+    std::vector<std::pair<Sudoku<N>, Hints<N>>> stack = {std::make_pair(*this, hints)};
+    std::array<int, N*N> posibilities;
+    std::iota(std::begin(posibilities), std::end(posibilities), 1);
+    // max length at most O(N^6), maybe a lower bound exists
 
-    do {
-        // this do-while loop doesn't seem to influence speed in praxis
-        updated = false;
-        positions = {};
-        bool solved = true; // hope for the best
+    while (stack.size() > 0) {
+        Sudoku<N> current;
+        std::tie(current, hints) = stack.back();
+        stack.pop_back();
+
+        // find best starting cell
+        std::vector<std::pair<int, int>> positions;
+        int p_i, p_j; // final positions, will be bound later
+        int clues = N*N+1; // max number of clues == N*N
 
         for (int i=0; i < N*N; ++i) {
             for (int j=0; j < N*N; ++j) {
-                if (this->field[i][j] != 0) {
+                if (current.field[i][j] != 0) {
                     continue;
                 }
                 int last_k = 0; // for trivial fill only
                 int current_clues = 0;
                 for (int k=1; k <= N*N; ++k) {
                     if (hints[i][j][k]) {
-                        current_clues++;
+                        ++current_clues;
                         last_k = k;
                     }
                 }
 
                 if (current_clues == 1) {
                     // trivial fill
-                    this->field[i][j] = last_k;
+                    current.field[i][j] = last_k;
                     remove_hint<N>(hints, i, j, last_k);
-                    updated = true;
-                    // -> new possibilities might be earlier in the
-                    // grid, so look for trivial fills a second time
+                    // revisiting previous cells doesn't seem to speed it up
                 } else if (current_clues == 0) {
                     // no candidate solution left for this cell
-                    return false;
-                } else {
+                    // there is no way to solve this sudoku with the current
+                    // hints.
+                    // goto goes to next element in stack, i.e. a continue for
+                    // the outer while loop, sorry
+                    goto next;
+                } else if (current_clues <= clues) {
                     positions.push_back(std::make_pair(i, j));
-                    solved = false;
+                    clues = current_clues;
                 }
             }
         }
-        if (solved) {
+        // no location found to fill in
+        if (clues == N*N+1) {
             // all cells are filled
-            solutions.push_back(*this);
-            return true;
+            solutions.push_back(current);
+            return;
         }
-    } while (updated);
 
-    int idx = std::uniform_int_distribution<>(0, positions.size()-1)(rng);
-    int p_i, p_j;
-    std::tie(p_i, p_j) = positions[idx];
-    std::shuffle(
-        std::begin(this->posibilities),
-        std::end(this->posibilities),
-        rng
-    );
-    // try all posibilities
-    // std::vector<Sudoku<N>> solutions;
-    for (int kk=0; kk < N*N; ++kk) {
-        int k = this->posibilities[kk];
-        if (not hints[p_i][p_j][k]) {
-            continue;
+        std::tie(p_i, p_j) = positions[std::uniform_int_distribution<>(0, positions.size()-1)(rng)];
+        std::shuffle(std::begin(posibilities), std::end(posibilities), rng);
+        // try all posibilities
+        for (int kk=0; kk < N*N; ++kk) {
+            int k = posibilities[kk];
+            if (not hints[p_i][p_j][k]) {
+                continue;
+            }
+            // stack creates a copy
+            stack.push_back(std::make_pair(current, hints));
+            // insert k into copies
+            remove_hint<N>(stack.back().second, p_i, p_j, k);
+            stack.back().first.field[p_i][p_j] = k;
         }
-        // copy
-        Sudoku<N> current(*this);
-        Hints<N> hints_cp(hints);
-
-        // insert k into copies
-        current.field[p_i][p_j] = k;
-        remove_hint<N>(hints_cp, p_i, p_j, k);
-
-        if (current.random_solve(hints_cp, solutions, rng)) {
-            return true;
-        }
+        next:;
     }
-
-    return false;
 }
 
 
