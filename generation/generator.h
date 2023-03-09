@@ -7,7 +7,35 @@
 #include <utility>
 #include <vector>
 
+#include <assert.h>
+
 #include "sudoku.h"
+
+
+template <int N>
+void switch_row_bands(Field<int, N>& field, int i, int j) {
+    assert(i < N);
+    assert(j < N);
+
+    for (int k=0; k<N*N; ++k) {
+        for (int l=0; l<N; ++l) {
+            std::swap(field[N*i+l][k], field[N*j+l][k]);
+        }
+    }
+}
+
+
+template <int N>
+void switch_col_bands(Field<int, N>& field, int i, int j) {
+    assert(i < N);
+    assert(j < N);
+
+    for (int k=0; k<N*N; ++k) {
+        for (int l=0; l<N; ++l) {
+            std::swap(field[k][N*i+l], field[k][N*j+l]);
+        }
+    }
+}
 
 
 template<int N>
@@ -153,6 +181,12 @@ Field<int, 3> random_partial_field<3>(std::mt19937& rng) {
         field[2][k+6] = bucket2[k];
     }
 
+    // without this a slight bias is introduced in generated solutions
+    // increasing the chacne that certain cells are a hint. This is a
+    // work-around but may still produce sudokus that are biased in some sense
+    // that is not as easily measurable
+    switch_row_bands<3>(field, 0, std::uniform_int_distribution<>(0, 2)(rng));
+    switch_col_bands<3>(field, 0, std::uniform_int_distribution<>(0, 2)(rng));
     return field;
 }
 
@@ -160,7 +194,6 @@ Field<int, 3> random_partial_field<3>(std::mt19937& rng) {
 template<int N>
 Sudoku<N> generate_filled_sudoku(std::mt19937& rng) {
     Sudoku<N> sudoku(random_partial_field<N>(rng));
-    // Sudoku<N> sudoku(fill_field<int, N>(0));
     std::vector<Sudoku<N>> solutions = sudoku.solve(random_first, rng);
     // std::vector<Sudoku<N>> solutions = sudoku.solve(all);
     if (solutions.size() == 0) {
