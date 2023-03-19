@@ -33,7 +33,7 @@ def set_style():
 
 
 def get_icon():
-    return Image.open("icon2.png")
+    return Image.open("icon.png")
 
 
 def get_num_sudokus(filename: Path) -> int:
