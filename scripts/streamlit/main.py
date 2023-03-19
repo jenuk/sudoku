@@ -1,6 +1,7 @@
 import argparse
 import math
 import random
+import os
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -432,6 +433,8 @@ if __name__ == "__main__":
         "--demo",
         action="store_true",
     )
+    if Path("scripts/streamlit").exists():
+        os.chdir(Path("scripts/streamlit"))
     args = parser.parse_args()
     demo_mode = args.demo or not Path("data").exists()
     main(demo_mode)
