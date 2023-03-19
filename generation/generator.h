@@ -193,9 +193,10 @@ Field<int, 3> random_partial_field<3>(std::mt19937& rng) {
 
 template<int N>
 Sudoku<N> generate_filled_sudoku(std::mt19937& rng) {
+    // Sudoku<N> sudoku(fill_field<int, N>(0));
     Sudoku<N> sudoku(random_partial_field<N>(rng));
-    std::vector<Sudoku<N>> solutions = sudoku.solve(random_first, rng);
-    // std::vector<Sudoku<N>> solutions = sudoku.solve(all);
+    // std::vector<Sudoku<N>> solutions = sudoku.solve(random_first, rng);
+    std::vector<Sudoku<N>> solutions = sudoku.solve(all);
     if (solutions.size() == 0) {
         // This shouldn't happen if the solver works
         std::cout << "Failed initial generation for:" << std::endl;
