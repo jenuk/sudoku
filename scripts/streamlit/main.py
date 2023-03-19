@@ -18,6 +18,7 @@ from tqdm import tqdm
 
 
 def set_style():
+    """Defining a custom css style to write down sudokus nicely."""
     st.markdown("""
     <style> 
         .sudoku_block {
@@ -33,11 +34,14 @@ def set_style():
     """, unsafe_allow_html=True)
 
 
-def get_icon():
+def get_icon() -> Image.Image:
+    """Load the page icon."""
     return Image.open("icon.png")
 
 
 def get_num_sudokus(filename: Path) -> int:
+    """Estimates the number of sudoku, solution pairs in a given file using
+    only the file size."""
     num_bytes = filename.stat().st_size
     # one line contains a partial and a filled field with each 81 characters, a
     # space and a linebreak -> 2*81+2 = 164 characters per line
@@ -99,7 +103,15 @@ def summarize_data(key: str, _sudokus: Dict[str, np.ndarray]) -> str:
 
 
 @st.cache_data(max_entries=1)
-def get_num_hints_dataframe(selected: List[str], _sudokus: Dict[str, np.ndarray]):
+def get_num_hints_dataframe(
+        selected: List[str],
+        _sudokus: Dict[str, np.ndarray],
+        ) -> pd.DataFrame:
+    """Gives a dataframe to plot the number of hints easily.
+
+    Returned columns:
+        Source, "Number of Hints", Count, Frequency
+    """
     dataframe = {"Source": [], "Number of Hints": [], "Count": [], "Frequency": []}
     for key in selected:
         num_hints, counts = np.unique(np.sum(_sudokus[key][:, 0] != 0,
@@ -119,7 +131,12 @@ def get_spatial_distribution(
         selected: List[str],
         _sudokus: Dict[str, np.ndarray],
         ) -> Tuple[np.ndarray, np.ndarray]:
-    # returns (len(selected), 10, h, w) with dtype int32, and float64
+    """Gives frequency/count of number k occurring at location i, j for
+    sudoku n
+
+    returns two np.ndarray of type int32 and float64 and shape
+        (len(selected), 10, h, w) [order n, k, i, j from above]
+    """
 
     count = np.zeros((len(selected), 10, 9, 9), dtype=np.int32)
     freq = np.zeros((len(selected), 10, 9, 9), dtype=np.float64)
@@ -133,7 +150,7 @@ def get_spatial_distribution(
 
 
 def display_sudoku(sudoku: np.ndarray):
-    """Displays a sudoku using html
+    """Displays a sudoku using html.
     
     Expects sudoku of shape (2, 9, 9)
     """
@@ -142,10 +159,11 @@ def display_sudoku(sudoku: np.ndarray):
     html = "<div class='sudoku_block'>"
     for i in range(9):
         for j in range(9):
+            v = int(sudoku[1, i, j]) # no unexpected string here
             if sudoku[0, i, j] != 0:
-                html += f"<b>{sudoku[1, i, j]}</b> "
+                html += f"<b>{v}</b> "
             else:
-                html += f"<span style='color:green'>{sudoku[1, i, j]}</span> "
+                html += f"<span style='color:green'>{v}</span> "
             if j == 2 or j == 5:
                 html += "│ "
         html += "<br>\n"
@@ -155,7 +173,10 @@ def display_sudoku(sudoku: np.ndarray):
     st.markdown(html, unsafe_allow_html=True)
 
 
-def get_pvals(counts, total_count):
+def get_pvals(counts: np.ndarray, total_count: int) -> np.ndarray:
+    """Performs binomial test on each location.
+
+    Returns same shape as input: (9, 9)"""
     pvals = np.zeros((9, 9))
     prob = np.mean(counts)/total_count
     for i in range(9):
@@ -324,21 +345,130 @@ def main(demo_mode: bool=False):
                     idx = random.randint(0, sudokus[key].shape[0]-1)
                     display_sudoku(sudokus[key][idx])
 
-        st.write("## Number of Hints")
+        st.write(
+            """
+            ## Number of Hints
+
+            A sudoku puzzle there are some cells that already contain a number
+            and some cells that are empty. The hints are then used to fill out
+            the empty cells. As long as there is only a single way to fill in
+            all cells without breaking any rules, the puzzle is _proper_. A
+            sudoku from which we can not remove any hints without making it
+            improper is called _minimal_.
+
+            The number of hints in a proper sudoku typically varies. In
+            general, a dataset of minimal sudokus is more useful than one of
+            non-minimals, since given the solutions additional hints can be
+            added if the application calls for it. And some applications may
+            benefit from having as few hints as possible, it is my believe that
+            an artificial neural network trained to solve sudokus with fewer
+            hints will probably generalize better to unseen data.
+
+            All that said, the number of hints in a proper sudoku will always
+            be at least 17, and there are no known sudokus with more than 40
+            hints (cf. [Mathematics of Sudokus](https://en.wikipedia.org/wiki/Mathematics_of_Sudoku)).
+            So, if any sudoku falls outside that range that already gives
+            concerns regarding the quality of that dataset. This is why we
+            start by plotting the number of hints in a sudoku.
+            """
+        )
         log_scale = st.checkbox("Logarithmic Scale")
     num_hints = get_num_hints_dataframe(selected, sudokus)
-    fig = px.bar(num_hints, x="Number of Hints", y="Frequency", color="Source", hover_data=num_hints.columns, log_y=log_scale, barmode="group")
+    fig = px.bar(
+        num_hints,
+        x="Number of Hints",
+        y="Frequency",
+        color="Source",
+        hover_data=num_hints.columns,
+        log_y=log_scale,
+        barmode="group",
+    )
     st.plotly_chart(fig, use_container_width=True)
 
 
     with st.columns([0.25, 0.5, 0.25])[1]: # centered layout for text
-        st.write("## Spatial Distribution of Numbers")
+        st.write(
+            """
+            ## Spatial Distribution of Numbers
+
+            Given a number in 1 to 9 or the emptiness we can ask the question
+            “How often does this ‘number’ occur at a specific position?” This
+            question will be answered by the next plot (left column).
+
+            But before that we should discuss something theoretical: How likely
+            should the number occur at each position? The answer is simple: The
+            number 1 to 9 should have the exact probability of $\\frac 19$, the
+            probability for emptiness is the average number of clues divided by
+            the number of cells. So, the probability of each location in a
+            sudoku has to be independent of the location.
+            """
+        )
+        st.expander("Proof sketch").write(
+            """
+            Let us suppose that we have two sets of sudokus, $M_i$ and $M_j$,
+            which consist of all the sudokus that have a particular number
+            located at positions $i$ and $j$, respectively.
+
+            Firstly, it is important to note that there exist certain
+            transformations that preserve the validity of a sudoku. In
+            particular, if a puzzle has only one solution before applying any
+            of these transformations, then that solution will be both valid and
+            unique after applying the transformation. This is because any other
+            solution could be transformed back to the original configuration,
+            contradicting the uniqueness of the original solution.
+
+            The relevant transformations for our purposes are as follows:
+
+            - Swapping columns that are in the same three-column band.
+            - Swapping column bands with each other. Swapping rows that are
+            - in the same three-row band. Swapping row bands with each other.
+
+            These transformations can be concatenated to form a new
+            transformation that preserves validity and uniqueness too.
+
+            Using these transformations, we can construct a bijective
+            transformation that moves the number located at position $i$ to
+            position $j$. Specifically, we can swap the row band containing
+            position $i$ with the row band containing position $j$, and then
+            swap the rows within those row bands to move position $i$ into the
+            same row as position $j$. We can repeat this process with the
+            columns as well.
+
+            Since our transformation is bijective, we can conclude that $\# M_i
+            = \# M_j$. In other words, the number of sudokus in the sets $M_i$
+            and $M_j$ are the same.
+
+            Therefore, if we take  uniform random sample from the set of all
+            possible sudokus, it is equally likely to be in the set $M_i$ as it
+            is to be in the set $M_j$.
+            """
+        )
+        st.write(
+            """
+            Since we know the theoretical probability and we know the practical
+            occurrences we can perform a binomial test on our data and possibly
+            reject locations, number combinations that have an unlikely
+            frequency. This is the right column plot.
+
+            **A note on $p$-hacking:**
+            If we perform many experiments and evaluate how likely each is
+            independently, then it is very likely that some will come back as
+            not distributed right, even if they are. E.g. if we reject
+            frequencies that have $\\frac 1{81} \\approx 1.23\\%$ of occuring,
+            then one such frequency will exist for every dataset & number
+            combination that we test on average. See also the [wikipedia
+            article about this](https://en.wikipedia.org/wiki/Data_dredging).
+            Therefore only the fields were multiple (possibly spatially close)
+            cells have rejected frequencies, we can really assume that there is
+            a spatial bias in the dataset.
+            """
+        )
 
         num = int(st.number_input("Spatial distribution of number",
                                   value=0, min_value=0, max_value=9))
         display_text = st.checkbox("Display numbers on top of plot")
-        col1, col2 = st.columns([1, 6])
-        set_p = col1.checkbox("Set p")
+        col1, col2 = st.columns([1, 3])
+        set_p = col1.checkbox("Set hard p-cutoff")
         p = col2.number_input(
             "Reject with probability (1/81 ≈ 0.0123)",
             min_value=1e-4,
